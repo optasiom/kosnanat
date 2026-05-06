@@ -1,0 +1,78 @@
+name: TikTok Downloader
+
+on:
+  workflow_dispatch:
+    inputs:
+      keyword:
+        description: 'کلیدواژه جستجو در تیک‌تاک'
+        required: true
+        type: string
+        default: 'funny'
+      count:
+        description: 'تعداد ویدیو برای دانلود'
+        required: true
+        type: number
+        default: 50
+
+jobs:
+  download-and-save:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # اجازه نوشتن در ریپازیتوری
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          pip install requests
+          sudo apt-get update
+          sudo apt-get install -y rar wget
+
+      - name: Run TikTok Downloader
+        env:
+          KEYWORD: ${{ github.event.inputs.keyword }}
+          COUNT: ${{ github.event.inputs.count }}
+        run: |
+          python download_and_split.py
+
+      - name: List downloaded files
+        run: |
+          echo "=== DOWNLOADS FOLDER ==="
+          ls -lh downloads/ || echo "No files in downloads"
+          echo ""
+          echo "=== VIDEOS FOLDER ==="
+          ls -lh videos/ | head -20 || echo "No files in videos"
+          echo ""
+          echo "Total videos downloaded:"
+          find videos/ -name "*.mp4" | wc -l
+
+      - name: Commit and push to repository
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # افزودن فایل‌ها به git
+          git add downloads/ videos/ || true
+          
+          # چک کردن تغییرات
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Add TikTok videos for: ${{ github.event.inputs.keyword }} (${GITHUB_RUN_NUMBER}) [skip ci]"
+            git push
+            echo "✅ Changes pushed to repository"
+          fi
+          
+          # نمایش وضعیت نهایی
+          echo ""
+          echo "📊 Final repository status:"
+          git log -1 --stat
